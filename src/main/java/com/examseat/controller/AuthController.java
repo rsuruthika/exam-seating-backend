@@ -1,22 +1,27 @@
 package com.examseat.controller;
 
-import com.examseat.config.JwtHelper;
-import com.examseat.model.User;
-import com.examseat.model.Student;
-import com.examseat.repository.UserRepository;
-import com.examseat.repository.StudentRepository;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.HashMap;
-import java.util.Map;
+import com.examseat.config.JwtHelper;
+import com.examseat.model.Student;
+import com.examseat.model.User;
+import com.examseat.repository.StudentRepository;
+import com.examseat.repository.UserRepository;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -42,34 +47,62 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> credentials) {
+
+        String username = credentials.get("username");
+        String password = credentials.get("password");
+
         try {
-            String username = credentials.get("username");
-            String password = credentials.get("password");
+
+            System.out.println("========== LOGIN DEBUG ==========");
+            System.out.println("Username: " + username);
+
+            User user = userRepository.findByUsername(username);
+
+            if (user == null) {
+                System.out.println("User not found!");
+                return ResponseEntity.status(401).body(Map.of(
+                        "error", "User not found"
+                ));
+            }
+
+            System.out.println("Database User: " + user.getUsername());
+            System.out.println("Database Role: " + user.getRole());
+            System.out.println("Database Password: " + user.getPassword());
+
+            boolean matches = passwordEncoder.matches(password, user.getPassword());
+
+            System.out.println("Password Matches: " + matches);
 
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(username, password)
             );
 
-            UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-            User user = userRepository.findByUsername(username);
-
             String token = jwtHelper.generateToken(username, user.getRole());
 
             Map<String, Object> response = new HashMap<>();
+
             response.put("token", token);
+
             response.put("user", Map.of(
-                "id", user.getId(),
-                "username", user.getUsername(),
-                "name", user.getName() != null ? user.getName() : "",
-                "role", user.getRole(),
-                "dept", user.getDept() != null ? user.getDept() : "",
-                "year", user.getYear() != null ? user.getYear() : 0,
-                "regNo", user.getRegNo() != null ? user.getRegNo() : user.getUsername()
+                    "id", user.getId(),
+                    "username", user.getUsername(),
+                    "name", user.getName() != null ? user.getName() : "",
+                    "role", user.getRole(),
+                    "dept", user.getDept() != null ? user.getDept() : "",
+                    "year", user.getYear() != null ? user.getYear() : 0,
+                    "regNo", user.getRegNo() != null ? user.getRegNo() : user.getUsername()
             ));
 
             return ResponseEntity.ok(response);
+
         } catch (Exception e) {
-            return ResponseEntity.status(401).body(Map.of("error", "Invalid credentials"));
+
+            e.printStackTrace();
+
+            return ResponseEntity.status(401).body(Map.of(
+                    "exception", e.getClass().getSimpleName(),
+                    "message", e.getMessage()
+            ));
         }
     }
 
